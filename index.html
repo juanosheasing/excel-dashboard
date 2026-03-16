@@ -1,0 +1,1037 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Excel-Style Slicer Dashboard</title>
+  <script src="./vendor/xlsx.full.min.js"></script>
+  <script src="./vendor/plotly-2.35.2.min.js"></script>
+  <style>
+    :root {
+      --sheet-bg: #ececec;
+      --line: #d2d2d2;
+      --panel: #f5f5f5;
+      --slicer-head: #dce8f5;
+      --slicer-item: #a7bdd4;
+      --slicer-item-text: #102030;
+      --blue-btn: #4f81bd;
+      --blue-btn-border: #1f4e78;
+      --text: #1d1d1d;
+      --muted: #666;
+      --radius: 2px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      font-family: "Calibri", "Segoe UI", sans-serif;
+      background:
+        repeating-linear-gradient(0deg, transparent 0 23px, var(--line) 23px 24px),
+        repeating-linear-gradient(90deg, transparent 0 79px, var(--line) 79px 80px),
+        var(--sheet-bg);
+      min-height: 100vh;
+    }
+
+    .wrap {
+      width: min(2048px, 99vw);
+      margin: 8px auto;
+      padding: 4px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .bar {
+      display: grid;
+      grid-template-columns: 220px 180px 230px 250px 1fr 1fr;
+      gap: 8px;
+      align-items: end;
+    }
+
+    .date-range {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      margin-bottom: 3px;
+      color: #333;
+      font-weight: 700;
+    }
+
+    input[type="file"],
+    select,
+    button {
+      width: 100%;
+      border: 1px solid #b7b7b7;
+      border-radius: var(--radius);
+      background: #fff;
+      min-height: 28px;
+      padding: 3px 6px;
+      font: inherit;
+      font-size: 12px;
+    }
+
+    .sheet-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: end;
+    }
+
+    .btn {
+      background: var(--blue-btn);
+      color: #fff;
+      border: 2px solid var(--blue-btn-border);
+      border-radius: 6px;
+      font-weight: 700;
+      min-height: 28px;
+      cursor: pointer;
+    }
+
+    .btn:active { transform: translateY(1px); }
+
+    .status {
+      margin: 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .slicer-row {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(180px, 1fr)) 360px;
+      gap: 10px;
+      align-items: start;
+    }
+
+    #slicerHost {
+      grid-column: 1 / span 4;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(180px, 1fr));
+      gap: 10px;
+    }
+
+    .slicer {
+      border: 1px solid #8cb0d7;
+      background: #eaf1fa;
+      min-height: 260px;
+    }
+
+    .slicer-head {
+      background: var(--slicer-head);
+      border-bottom: 1px solid #a9bfd9;
+      padding: 2px 6px;
+      font-weight: 700;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      height: 24px;
+    }
+
+    .slicer-body {
+      padding: 4px;
+    }
+
+    .slicer-body select {
+      min-height: 228px;
+      background: #f9fbff;
+      border-color: #9db7d1;
+    }
+
+    .slicer-body select option {
+      margin: 2px 0;
+      padding: 4px 6px;
+      border: 1px solid #90a9c5;
+      background: var(--slicer-item);
+      color: var(--slicer-item-text);
+    }
+
+    .controls-panel {
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+
+    .panel {
+      border: 1px solid #bcbcbc;
+      background: var(--panel);
+      padding: 6px;
+    }
+
+    .btn-row {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+      margin-top: 18px;
+    }
+
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .kpi {
+      border: 1px solid #bcbcbc;
+      background: #fff;
+      padding: 6px;
+      font-size: 12px;
+    }
+
+    .kpi strong {
+      font-size: 18px;
+      display: block;
+      margin-top: 2px;
+    }
+
+    .chart-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .chart-card {
+      border: 1px solid #bcbcbc;
+      background: #fff;
+      min-height: 320px;
+    }
+
+    .chart-title {
+      text-align: center;
+      font-weight: 700;
+      color: #666;
+      border-bottom: 1px solid #ddd;
+      padding: 4px;
+      font-size: 14px;
+    }
+
+    .plot {
+      min-height: 280px;
+    }
+
+    .preview-wrap {
+      border: 1px solid #bbb;
+      background: #fff;
+      max-height: 180px;
+      overflow: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      table-layout: fixed;
+    }
+
+    th,
+    td {
+      border: 1px solid #ddd;
+      padding: 3px 6px;
+      text-align: left;
+    }
+
+    td {
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      max-width: 320px;
+      vertical-align: top;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: #ef8f34;
+      color: #111;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 1180px) {
+      .bar { grid-template-columns: 1fr 1fr; }
+      .slicer-row { grid-template-columns: 1fr 1fr; }
+      #slicerHost {
+        grid-column: auto;
+        grid-template-columns: 1fr 1fr;
+      }
+      .chart-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="bar">
+      <div>
+        <label for="fileInput">Excel File</label>
+        <input id="fileInput" type="file" accept=".xlsx,.xls,.xlsm,.xlsb">
+      </div>
+
+      <div>
+        <label for="measureSelect">Total Column</label>
+        <select id="measureSelect" disabled></select>
+      </div>
+
+      <div>
+        <label for="sheetSelect">Worksheet</label>
+        <div class="sheet-row">
+          <select id="sheetSelect" disabled></select>
+          <button id="loadSheetBtn" class="btn" type="button">Load</button>
+        </div>
+      </div>
+
+      <div>
+        <label>Date Range (from Date field)</label>
+        <div class="date-range">
+          <input id="dateFrom" type="date" disabled>
+          <input id="dateTo" type="date" disabled>
+        </div>
+      </div>
+
+      <div>
+        <label for="tree1Select">Treemap 1 Group</label>
+        <select id="tree1Select" disabled></select>
+      </div>
+
+      <div>
+        <label for="tree2Select">Treemap 2 Group</label>
+        <select id="tree2Select" disabled></select>
+      </div>
+    </div>
+
+    <p id="status" class="status">Choose an Excel workbook to begin.</p>
+
+    <div class="slicer-row">
+      <div id="slicerHost"></div>
+
+      <div class="controls-panel">
+        <div class="panel">
+          <label for="slicerFields">Slicer Columns (pick up to 4)</label>
+          <select id="slicerFields" multiple disabled></select>
+        </div>
+
+        <div class="btn-row">
+          <button id="updateBtn" class="btn" type="button">Update Treemaps</button>
+          <button id="resetBtn" class="btn" type="button">Reset Slicers</button>
+        </div>
+
+        <div class="kpi-row">
+          <div class="kpi">Filtered Rows<strong id="rowCount">0</strong></div>
+          <div class="kpi">Grand Total<strong id="grandTotal">0</strong></div>
+          <div class="kpi">Groups<strong id="groupCount">0</strong></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-row">
+      <section class="chart-card">
+        <div class="chart-title">Students</div>
+        <div id="chart1" class="plot"></div>
+      </section>
+      <section class="chart-card">
+        <div class="chart-title">Locations</div>
+        <div id="chart2" class="plot"></div>
+      </section>
+    </div>
+
+    <div class="preview-wrap">
+      <table id="preview"></table>
+    </div>
+  </div>
+
+  <script>
+    const fileInput = document.getElementById("fileInput");
+    const sheetSelect = document.getElementById("sheetSelect");
+    const loadSheetBtn = document.getElementById("loadSheetBtn");
+    const statusEl = document.getElementById("status");
+
+    const measureSelect = document.getElementById("measureSelect");
+    const tree1Select = document.getElementById("tree1Select");
+    const tree2Select = document.getElementById("tree2Select");
+    const slicerFields = document.getElementById("slicerFields");
+    const slicerHost = document.getElementById("slicerHost");
+
+    const updateBtn = document.getElementById("updateBtn");
+    const resetBtn = document.getElementById("resetBtn");
+
+    const rowCountEl = document.getElementById("rowCount");
+    const grandTotalEl = document.getElementById("grandTotal");
+    const groupCountEl = document.getElementById("groupCount");
+    const previewTable = document.getElementById("preview");
+    const ROW_COUNT = "(Row Count)";
+    const dateFromInput = document.getElementById("dateFrom");
+    const dateToInput = document.getElementById("dateTo");
+
+    const EXCLUDED_FIELDS = new Set([
+      normalizeFieldName("Students Involved"),
+      normalizeFieldName("Total Actions"),
+      normalizeFieldName("boarding house"),
+      normalizeFieldName("Outstanding Actions")
+    ]);
+
+    const SLICER_EXCLUDED_FIELDS = new Set([
+      normalizeFieldName("Academic House")
+    ]);
+
+    const PREFERRED_SLICERS = ["Name", "Year", "Form", "Location"];
+
+    let workbook = null;
+    let headers = [];
+    let allRows = [];
+    let numericFields = [];
+    let dimensionFields = [];
+    let slicerState = {};
+    let dateField = "";
+
+    const fmt = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
+    const textMeasureCanvas = document.createElement("canvas");
+    const textMeasureCtx = textMeasureCanvas.getContext("2d");
+    if (textMeasureCtx) textMeasureCtx.font = "12px Calibri, Segoe UI, sans-serif";
+
+    fileInput.addEventListener("change", handleFile);
+    loadSheetBtn.addEventListener("click", () => {
+      if (sheetSelect.value) parseSheet(sheetSelect.value);
+    });
+    slicerFields.addEventListener("change", refreshSlicersFromPicker);
+    updateBtn.addEventListener("click", renderAll);
+    resetBtn.addEventListener("click", resetSlicerSelections);
+    measureSelect.addEventListener("change", renderAll);
+    tree1Select.addEventListener("change", renderAll);
+    tree2Select.addEventListener("change", renderAll);
+    dateFromInput.addEventListener("change", renderAll);
+    dateToInput.addEventListener("change", renderAll);
+
+    async function handleFile(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      clearState();
+      statusEl.textContent = "Reading workbook...";
+
+      try {
+        const ab = await file.arrayBuffer();
+        workbook = XLSX.read(ab, { type: "array" });
+
+        sheetSelect.disabled = false;
+        sheetSelect.innerHTML = "";
+        workbook.SheetNames.forEach((name) => {
+          sheetSelect.appendChild(new Option(name, name));
+        });
+
+        statusEl.textContent = `Workbook loaded. Select a tab and click Load.`;
+        if (workbook.SheetNames.length === 1) {
+          parseSheet(workbook.SheetNames[0]);
+        }
+      } catch (_err) {
+        statusEl.textContent = "Could not read this workbook.";
+      }
+    }
+
+    function parseSheet(sheetName) {
+      const ws = workbook?.Sheets?.[sheetName];
+      if (!ws) return;
+
+      const grid = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: "" });
+      const headerRow = detectHeaderRow(grid);
+
+      if (headerRow < 0) {
+        statusEl.textContent = "No usable header row found in this tab.";
+        return;
+      }
+
+      const sourceHeaders = normalizeHeaders(grid[headerRow] || []);
+      const kept = sourceHeaders
+        .map((name, index) => ({ name, index }))
+        .filter((item) => !EXCLUDED_FIELDS.has(normalizeFieldName(item.name)));
+
+      headers = kept.map((item) => item.name);
+      allRows = buildRows(grid, headerRow + 1, kept);
+      classifyColumns();
+      setupControls();
+
+      statusEl.textContent = `Loaded ${sheetName}: ${allRows.length.toLocaleString()} rows.`;
+      renderAll();
+    }
+
+    function detectHeaderRow(grid) {
+      let best = -1;
+      let bestScore = 0;
+      const limit = Math.min(grid.length, 25);
+
+      for (let i = 0; i < limit; i += 1) {
+        const row = grid[i] || [];
+        const filled = row.filter((c) => String(c).trim() !== "");
+        if (filled.length < 2) continue;
+        const unique = new Set(filled.map((v) => String(v).toLowerCase().trim()));
+        const score = filled.length + unique.size * 0.4;
+        if (score > bestScore) {
+          bestScore = score;
+          best = i;
+        }
+      }
+      return best;
+    }
+
+    function normalizeHeaders(raw) {
+      const seen = new Map();
+      return raw.map((h, idx) => {
+        const base = String(h || "").trim() || `Column_${idx + 1}`;
+        const n = (seen.get(base) || 0) + 1;
+        seen.set(base, n);
+        return n > 1 ? `${base}_${n}` : base;
+      });
+    }
+
+    function buildRows(grid, start, mappedCols) {
+      const rows = [];
+      for (let r = start; r < grid.length; r += 1) {
+        const row = grid[r] || [];
+        const rec = {};
+        let hasData = false;
+        mappedCols.forEach(({ name, index }) => {
+          const val = row[index] ?? "";
+          const t = typeof val === "string" ? val.trim() : val;
+          rec[name] = t;
+          if (String(t).trim() !== "") hasData = true;
+        });
+        if (hasData) rows.push(rec);
+      }
+      return rows;
+    }
+
+    function classifyColumns() {
+      numericFields = [];
+      dimensionFields = [];
+
+      headers.forEach((field) => {
+        let nonBlank = 0;
+        let numeric = 0;
+
+        for (const row of allRows) {
+          const v = row[field];
+          if (v === "" || v === null || v === undefined) continue;
+          nonBlank += 1;
+          const num = toNumber(v);
+          if (Number.isFinite(num) && String(v).trim() !== "" && !(typeof v === "string" && isNaN(Number(v.replace(/[$,%\s,]/g, ""))))) {
+            numeric += 1;
+          }
+        }
+
+        if (nonBlank > 0 && numeric / nonBlank >= 0.7) numericFields.push(field);
+        else dimensionFields.push(field);
+      });
+
+      if (!numericFields.length && headers.length) numericFields = [headers[0]];
+      if (!dimensionFields.length) dimensionFields = headers.filter((h) => !numericFields.includes(h));
+    }
+
+    function setupControls() {
+      const measureOptions = [ROW_COUNT, ...numericFields];
+      fillSelect(measureSelect, measureOptions, ROW_COUNT);
+
+      const t1 = pickDimension(["student", "name"], 0);
+      const t2 = pickDimension(["location", "room", "site"], 1);
+      fillSelect(tree1Select, dimensionFields, t1);
+      fillSelect(tree2Select, dimensionFields, t2);
+
+      const slicerCandidates = dimensionFields.filter(
+        (field) => !SLICER_EXCLUDED_FIELDS.has(normalizeFieldName(field))
+      );
+
+      const preferredNormalized = PREFERRED_SLICERS.map((name) => normalizeFieldName(name));
+      const orderedSlicerCandidates = [
+        ...slicerCandidates.filter((field) => preferredNormalized.includes(normalizeFieldName(field))),
+        ...slicerCandidates.filter((field) => !preferredNormalized.includes(normalizeFieldName(field)))
+      ];
+
+      fillSelect(slicerFields, orderedSlicerCandidates, null, true);
+      const defaults = orderedSlicerCandidates.filter((field) =>
+        preferredNormalized.includes(normalizeFieldName(field))
+      ).slice(0, 4);
+
+      if (!defaults.length) {
+        defaults.push(...orderedSlicerCandidates.slice(0, Math.min(4, orderedSlicerCandidates.length)));
+      }
+      [...slicerFields.options].forEach((opt) => {
+        opt.selected = defaults.includes(opt.value);
+      });
+
+      measureSelect.disabled = false;
+      tree1Select.disabled = false;
+      tree2Select.disabled = false;
+      slicerFields.disabled = false;
+
+      dateField = headers.find((h) => h.toLowerCase().includes("date")) || "";
+      configureDateRangeInputs();
+
+      refreshSlicersFromPicker();
+    }
+
+    function configureDateRangeInputs() {
+      dateFromInput.value = "";
+      dateToInput.value = "";
+
+      if (!dateField) {
+        dateFromInput.disabled = true;
+        dateToInput.disabled = true;
+        dateFromInput.min = "";
+        dateFromInput.max = "";
+        dateToInput.min = "";
+        dateToInput.max = "";
+        return;
+      }
+
+      let minDate = null;
+      let maxDate = null;
+
+      allRows.forEach((row) => {
+        const d = parseDateValue(row[dateField]);
+        if (!d) return;
+        if (!minDate || d < minDate) minDate = d;
+        if (!maxDate || d > maxDate) maxDate = d;
+      });
+
+      if (!minDate || !maxDate) {
+        dateFromInput.disabled = true;
+        dateToInput.disabled = true;
+        return;
+      }
+
+      const minIso = toIsoDate(minDate);
+      const maxIso = toIsoDate(maxDate);
+
+      dateFromInput.disabled = false;
+      dateToInput.disabled = false;
+      dateFromInput.min = minIso;
+      dateFromInput.max = maxIso;
+      dateToInput.min = minIso;
+      dateToInput.max = maxIso;
+    }
+
+    function fillSelect(selectEl, values, selected, keepBlank = false) {
+      selectEl.innerHTML = "";
+      values.forEach((v) => {
+        const opt = new Option(v, v);
+        if (!keepBlank && selected && selected === v) opt.selected = true;
+        selectEl.add(opt);
+      });
+    }
+
+    function pickDimension(hints, fallbackIndex) {
+      const found = dimensionFields.find((f) => hints.some((h) => f.toLowerCase().includes(h)));
+      return found || dimensionFields[Math.min(fallbackIndex, Math.max(0, dimensionFields.length - 1))] || "";
+    }
+
+    function refreshSlicersFromPicker() {
+      const fields = [...slicerFields.selectedOptions].map((o) => o.value).slice(0, 4);
+      const nextState = {};
+      slicerHost.innerHTML = "";
+
+      fields.forEach((field) => {
+        const prev = slicerState[field] || new Set();
+        nextState[field] = prev;
+
+        const box = document.createElement("section");
+        box.className = "slicer";
+
+        const head = document.createElement("div");
+        head.className = "slicer-head";
+        head.innerHTML = `<span>${field}</span><span>⌄</span>`;
+
+        const body = document.createElement("div");
+        body.className = "slicer-body";
+
+        const sel = document.createElement("select");
+        sel.multiple = true;
+        sel.size = 10;
+
+        distinctValues(field).forEach((value) => {
+          const opt = new Option(value, value);
+          opt.selected = prev.has(value);
+          sel.add(opt);
+        });
+
+        sel.addEventListener("change", () => {
+          slicerState[field] = new Set([...sel.selectedOptions].map((o) => o.value));
+          renderAll();
+        });
+
+        body.appendChild(sel);
+        box.appendChild(head);
+        box.appendChild(body);
+        slicerHost.appendChild(box);
+      });
+
+      slicerState = nextState;
+      renderAll();
+    }
+
+    function distinctValues(field) {
+      const set = new Set();
+      allRows.forEach((row) => {
+        const t = String(row[field] ?? "").trim();
+        set.add(t || "(blank)");
+      });
+      return [...set].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    }
+
+    function applyFilters() {
+      const fromDate = dateFromInput.value ? new Date(`${dateFromInput.value}T00:00:00`) : null;
+      const toDate = dateToInput.value ? new Date(`${dateToInput.value}T23:59:59`) : null;
+
+      return allRows.filter((row) => {
+        for (const [field, selected] of Object.entries(slicerState)) {
+          if (!selected || selected.size === 0) continue;
+          const value = String(row[field] ?? "").trim() || "(blank)";
+          if (!selected.has(value)) return false;
+        }
+
+        if (dateField && (fromDate || toDate)) {
+          const rowDate = parseDateValue(row[dateField]);
+          if (!rowDate) return false;
+          if (fromDate && rowDate < fromDate) return false;
+          if (toDate && rowDate > toDate) return false;
+        }
+
+        return true;
+      });
+    }
+
+    function renderAll() {
+      if (!allRows.length) {
+        drawEmpty("chart1", "Load a worksheet to see treemap.");
+        drawEmpty("chart2", "Load a worksheet to see treemap.");
+        previewTable.innerHTML = "";
+        return;
+      }
+
+      const rows = applyFilters();
+      const measure = measureSelect.value;
+      const g1 = tree1Select.value;
+
+      let total = 0;
+      const groups = new Set();
+      rows.forEach((r) => {
+        total += measureValue(r, measure);
+        groups.add(String(r[g1] ?? "").trim() || "(blank)");
+      });
+
+      rowCountEl.textContent = rows.length.toLocaleString();
+      grandTotalEl.textContent = fmt.format(total);
+      groupCountEl.textContent = groups.size.toLocaleString();
+
+      drawTreemap("chart1", rows, measure, tree1Select.value);
+      drawTreemap("chart2", rows, measure, tree2Select.value);
+      drawPreview(rows);
+    }
+
+    function drawTreemap(targetId, rows, measure, groupField) {
+      if (!measure || !groupField) {
+        drawEmpty(targetId, "Choose value and group fields.");
+        return;
+      }
+      if (!rows.length) {
+        drawEmpty(targetId, "No rows match slicers.");
+        return;
+      }
+
+      const totals = new Map();
+      rows.forEach((row) => {
+        const key = String(row[groupField] ?? "").trim() || "(blank)";
+        totals.set(key, (totals.get(key) || 0) + measureValue(row, measure));
+      });
+
+      let hasPositive = false;
+      for (const value of totals.values()) {
+        if (value > 0) {
+          hasPositive = true;
+          break;
+        }
+      }
+
+      if (!hasPositive) {
+        totals.clear();
+        rows.forEach((row) => {
+          const key = String(row[groupField] ?? "").trim() || "(blank)";
+          totals.set(key, (totals.get(key) || 0) + 1);
+        });
+      }
+
+      const root = "All";
+      const labels = [root];
+      const parents = [""];
+      const values = [0];
+      const fullLabels = [root];
+
+      let rootTotal = 0;
+      for (const [k, v] of totals.entries()) {
+        const safeValue = Math.max(0, v);
+        labels.push(wrapText(k, 14, 3));
+        fullLabels.push(k);
+        parents.push(root);
+        values.push(safeValue);
+        rootTotal += safeValue;
+      }
+      values[0] = rootTotal;
+
+      if (rootTotal <= 0) {
+        drawEmpty(targetId, "No positive totals in selected measure.");
+        return;
+      }
+
+      Plotly.newPlot(targetId, [{
+        type: "treemap",
+        labels,
+        parents,
+        values,
+        branchvalues: "total",
+        textinfo: "label+value",
+        customdata: fullLabels,
+        hovertemplate: "%{customdata}<br>Total: %{value:,.2f}<extra></extra>",
+        marker: {
+          colorscale: [
+            [0.0, "#5b87c1"],
+            [0.45, "#5d8ec8"],
+            [1.0, "#f08a24"]
+          ]
+        }
+      }], {
+        margin: { t: 6, l: 6, r: 6, b: 6 },
+        paper_bgcolor: "white",
+        plot_bgcolor: "white"
+      }, { responsive: true, displaylogo: false });
+    }
+
+    function drawEmpty(targetId, text) {
+      Plotly.newPlot(targetId, [], {
+        margin: { t: 6, l: 6, r: 6, b: 6 },
+        annotations: [{
+          text,
+          showarrow: false,
+          x: 0.5,
+          y: 0.5,
+          xref: "paper",
+          yref: "paper",
+          font: { size: 13, color: "#666" }
+        }],
+        xaxis: { visible: false },
+        yaxis: { visible: false },
+        paper_bgcolor: "white",
+        plot_bgcolor: "white"
+      }, { responsive: true, displaylogo: false });
+    }
+
+    function drawPreview(rows) {
+      const sample = rows.slice(0, 20);
+      if (!sample.length) {
+        previewTable.innerHTML = "";
+        return;
+      }
+
+      const widthSample = rows.slice(0, 150);
+      const colgroup = document.createElement("colgroup");
+      const widths = estimatePreviewColumnWidths(widthSample);
+      widths.forEach((width) => {
+        const col = document.createElement("col");
+        col.style.width = `${width}px`;
+        colgroup.appendChild(col);
+      });
+
+      const thead = document.createElement("thead");
+      const hr = document.createElement("tr");
+      headers.forEach((h) => {
+        const th = document.createElement("th");
+        th.textContent = h;
+        hr.appendChild(th);
+      });
+      thead.appendChild(hr);
+
+      const tbody = document.createElement("tbody");
+      sample.forEach((row) => {
+        const tr = document.createElement("tr");
+        headers.forEach((h) => {
+          const td = document.createElement("td");
+          td.textContent = String(row[h] ?? "");
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+
+      previewTable.innerHTML = "";
+      previewTable.appendChild(colgroup);
+      previewTable.appendChild(thead);
+      previewTable.appendChild(tbody);
+    }
+
+    function estimatePreviewColumnWidths(rows) {
+      return headers.map((header) => {
+        const field = normalizeFieldName(header);
+        const isDate = field.includes("date");
+        const isLongText =
+          field.includes("details") ||
+          field.includes("description") ||
+          field.includes("comment") ||
+          field.includes("note") ||
+          field.includes("action");
+
+        const minWidth = isDate ? 130 : isLongText ? 240 : 90;
+        const maxWidth = isDate ? 180 : isLongText ? 520 : 280;
+
+        let width = estimateTextWidth(header) + 24;
+
+        rows.forEach((row) => {
+          const value = String(row[header] ?? "");
+          const truncated = value.length > 90 ? `${value.slice(0, 90)}...` : value;
+          width = Math.max(width, estimateTextWidth(truncated) + 20);
+        });
+
+        return clamp(width, minWidth, maxWidth);
+      });
+    }
+
+    function estimateTextWidth(text) {
+      if (!textMeasureCtx) return String(text).length * 7;
+      return textMeasureCtx.measureText(String(text)).width;
+    }
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function resetSlicerSelections() {
+      Object.keys(slicerState).forEach((k) => {
+        slicerState[k] = new Set();
+      });
+      refreshSlicersFromPicker();
+      renderAll();
+    }
+
+    function toNumber(value) {
+      if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+      if (typeof value !== "string") return 0;
+      const cleaned = value.replace(/[$,%\s,]/g, "");
+      const num = Number(cleaned);
+      return Number.isFinite(num) ? num : 0;
+    }
+
+    function measureValue(row, measureField) {
+      if (measureField === ROW_COUNT) return 1;
+      return toNumber(row[measureField]);
+    }
+
+    function parseDateValue(value) {
+      if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        return new Date(value.getFullYear(), value.getMonth(), value.getDate());
+      }
+
+      if (typeof value === "number" && Number.isFinite(value)) {
+        const epoch = new Date(Date.UTC(1899, 11, 30));
+        const ms = Math.round(value * 86400000);
+        const d = new Date(epoch.getTime() + ms);
+        return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+      }
+
+      const text = String(value ?? "").trim();
+      if (!text) return null;
+
+      const dmY = text.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+      if (dmY) {
+        const day = Number(dmY[1]);
+        const month = Number(dmY[2]);
+        let year = Number(dmY[3]);
+        if (year < 100) year += 2000;
+        const d = new Date(year, month - 1, day);
+        if (!Number.isNaN(d.getTime())) return d;
+      }
+
+      const parsed = new Date(text);
+      if (!Number.isNaN(parsed.getTime())) {
+        return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+      }
+
+      return null;
+    }
+
+    function toIsoDate(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, "0");
+      const d = String(date.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    }
+
+    function normalizeFieldName(name) {
+      return String(name ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+    }
+
+    function wrapText(text, chunk = 14, maxLines = 3) {
+      const words = String(text ?? "").split(/\s+/).filter(Boolean);
+      if (!words.length) return "(blank)";
+
+      const lines = [];
+      let line = "";
+
+      for (const word of words) {
+        const next = line ? `${line} ${word}` : word;
+        if (next.length <= chunk || !line) {
+          line = next;
+        } else {
+          lines.push(line);
+          line = word;
+          if (lines.length === maxLines - 1) break;
+        }
+      }
+
+      if (line && lines.length < maxLines) lines.push(line);
+
+      const consumed = lines.join(" ").trim().length;
+      const original = words.join(" ");
+      const clipped = consumed < original.length;
+
+      if (clipped && lines.length) {
+        lines[lines.length - 1] = `${lines[lines.length - 1]}...`;
+      }
+
+      return lines.join("<br>");
+    }
+
+    function clearState() {
+      workbook = null;
+      headers = [];
+      allRows = [];
+      numericFields = [];
+      dimensionFields = [];
+      slicerState = {};
+      dateField = "";
+
+      rowCountEl.textContent = "0";
+      grandTotalEl.textContent = "0";
+      groupCountEl.textContent = "0";
+
+      [measureSelect, tree1Select, tree2Select, slicerFields].forEach((el) => {
+        el.innerHTML = "";
+        el.disabled = true;
+      });
+
+      sheetSelect.innerHTML = "";
+      sheetSelect.disabled = true;
+      dateFromInput.value = "";
+      dateToInput.value = "";
+      dateFromInput.disabled = true;
+      dateToInput.disabled = true;
+      dateFromInput.min = "";
+      dateFromInput.max = "";
+      dateToInput.min = "";
+      dateToInput.max = "";
+      slicerHost.innerHTML = "";
+      previewTable.innerHTML = "";
+      drawEmpty("chart1", "Load a worksheet to see treemap.");
+      drawEmpty("chart2", "Load a worksheet to see treemap.");
+    }
+
+    clearState();
+  </script>
+</body>
+</html>
