@@ -110,15 +110,18 @@
 
     #slicerHost {
       grid-column: 1 / span 4;
-      display: grid;
-      grid-template-columns: repeat(4, minmax(180px, 1fr));
+      display: flex;
+      flex-wrap: wrap;
       gap: 10px;
+      align-items: flex-start;
+      align-content: flex-start;
     }
 
     .slicer {
       border: 1px solid #8cb0d7;
       background: #eaf1fa;
       min-height: 260px;
+      flex: 0 0 auto;
     }
 
     .slicer-head {
@@ -255,6 +258,7 @@
       .slicer-row { grid-template-columns: 1fr 1fr; }
       #slicerHost {
         grid-column: auto;
+        display: grid;
         grid-template-columns: 1fr 1fr;
       }
       .chart-row { grid-template-columns: 1fr; }
@@ -665,6 +669,7 @@
 
         const box = document.createElement("section");
         box.className = "slicer";
+        box.style.width = `${estimateSlicerWidth(field)}px`;
 
         const head = document.createElement("div");
         head.className = "slicer-head";
@@ -721,6 +726,18 @@
         });
       });
       return [...set].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    }
+
+    function estimateSlicerWidth(field) {
+      const values = distinctValues(field);
+      const label = slicerFieldLabel(field);
+      let width = estimateTextWidth(label) + 44;
+
+      values.slice(0, 200).forEach((value) => {
+        width = Math.max(width, estimateTextWidth(value) + 52);
+      });
+
+      return Math.round(clamp(width, 150, 330));
     }
 
     function applyFilters() {
