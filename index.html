@@ -44,7 +44,7 @@
 
     .bar {
       display: grid;
-      grid-template-columns: 220px 180px 230px 250px 170px 1fr 1fr;
+      grid-template-columns: 220px 180px 230px 250px 1fr 1fr;
       gap: 8px;
       align-items: end;
     }
@@ -293,16 +293,6 @@
       </div>
 
       <div>
-        <label for="studentTypeSelect">Student Type</label>
-        <select id="studentTypeSelect" disabled>
-          <option value="Subject" selected>Subject</option>
-          <option value="Bystander">Bystander</option>
-          <option value="Victim">Victim</option>
-          <option value="All Types">All Types</option>
-        </select>
-      </div>
-
-      <div>
         <label for="tree1Select">Treemap 1 Group</label>
         <select id="tree1Select" disabled></select>
       </div>
@@ -362,7 +352,6 @@
     const measureSelect = document.getElementById("measureSelect");
     const tree1Select = document.getElementById("tree1Select");
     const tree2Select = document.getElementById("tree2Select");
-    const studentTypeSelect = document.getElementById("studentTypeSelect");
     const slicerFields = document.getElementById("slicerFields");
     const slicerHost = document.getElementById("slicerHost");
 
@@ -387,9 +376,9 @@
       normalizeFieldName("Academic House")
     ]);
 
-    const PREFERRED_SLICERS = ["Name - Role", "Year", "Form", "Location"];
+    const PREFERRED_SLICERS = ["Name", "Role", "Year", "Form", "Location"];
     const STUDENTS_GROUP_KEY = "__students_involved__";
-    const STUDENT_ROLE_SLICER_KEY = "__student_role_slicer__";
+    const STUDENT_TYPE_SLICER_KEY = "__student_type_slicer__";
     const MAX_SLICERS = 6;
 
     let workbook = null;
@@ -418,7 +407,6 @@
     tree2Select.addEventListener("change", renderAll);
     dateFromInput.addEventListener("change", renderAll);
     dateToInput.addEventListener("change", renderAll);
-    studentTypeSelect.addEventListener("change", renderAll);
 
     async function handleFile(e) {
       const file = e.target.files[0];
@@ -567,8 +555,8 @@
       );
 
       const roleAwareSlicerCandidates = [...slicerCandidates];
-      if (studentsInvolvedField && !roleAwareSlicerCandidates.includes(STUDENT_ROLE_SLICER_KEY)) {
-        roleAwareSlicerCandidates.unshift(STUDENT_ROLE_SLICER_KEY);
+      if (studentsInvolvedField && !roleAwareSlicerCandidates.includes(STUDENT_TYPE_SLICER_KEY)) {
+        roleAwareSlicerCandidates.push(STUDENT_TYPE_SLICER_KEY);
       }
 
       const preferredNormalized = PREFERRED_SLICERS.map((name) => normalizeFieldName(name));
@@ -594,8 +582,6 @@
       tree1Select.disabled = false;
       tree2Select.disabled = false;
       slicerFields.disabled = false;
-      populateStudentTypeOptions();
-
       dateField = headers.find((h) => h.toLowerCase().includes("date")) || "";
       configureDateRangeInputs();
 
@@ -710,8 +696,8 @@
     }
 
     function distinctValues(field) {
-      if (field === STUDENT_ROLE_SLICER_KEY) {
-        return distinctStudentRoleValues();
+      if (field === STUDENT_TYPE_SLICER_KEY) {
+        return distinctStudentTypeValues();
       }
 
       const set = new Set();
@@ -722,13 +708,12 @@
       return [...set].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
     }
 
-    function distinctStudentRoleValues() {
+    function distinctStudentTypeValues() {
       const set = new Set();
       allRows.forEach((row) => {
         const parsed = parseStudentsInvolved(row[studentsInvolvedField]);
         parsed.forEach((entry) => {
-          const role = entry.type || "Unknown";
-          set.add(`${entry.name} - ${role}`);
+          set.add(entry.type || "Unknown");
         });
       });
       return [...set].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
@@ -742,9 +727,9 @@
         for (const [field, selected] of Object.entries(slicerState)) {
           if (!selected || selected.size === 0) continue;
 
-          if (field === STUDENT_ROLE_SLICER_KEY) {
+          if (field === STUDENT_TYPE_SLICER_KEY) {
             const parsed = parseStudentsInvolved(row[studentsInvolvedField]);
-            const roles = new Set(parsed.map((entry) => `${entry.name} - ${entry.type || "Unknown"}`));
+            const roles = new Set(parsed.map((entry) => entry.type || "Unknown"));
             let matched = false;
             for (const item of selected) {
               if (roles.has(item)) {
@@ -782,8 +767,7 @@
       const rows = applyFilters();
       const measure = measureSelect.value;
       const g1 = tree1Select.value;
-      const studentType = studentTypeSelect.value;
-      const primaryTotals = groupTotals(rows, measure, g1, studentType);
+      const primaryTotals = groupTotals(rows, measure, g1);
 
       let total = 0;
       rows.forEach((r) => { total += measureValue(r, measure); });
@@ -807,7 +791,7 @@
         return;
       }
 
-      const totals = groupTotals(rows, measure, groupField, studentTypeSelect.value);
+      const totals = groupTotals(rows, measure, groupField);
 
       let hasPositive = false;
       for (const value of totals.values()) {
@@ -818,7 +802,7 @@
       }
 
       if (!hasPositive) {
-        const fallbackTotals = groupTotals(rows, ROW_COUNT, groupField, studentTypeSelect.value);
+        const fallbackTotals = groupTotals(rows, ROW_COUNT, groupField);
         totals.clear();
         for (const [key, value] of fallbackTotals.entries()) {
           totals.set(key, value);
@@ -870,16 +854,25 @@
       }, { responsive: true, displaylogo: false });
     }
 
-    function groupTotals(rows, measure, groupField, studentType) {
+    function groupTotals(rows, measure, groupField) {
       const totals = new Map();
 
       if (groupField === STUDENTS_GROUP_KEY) {
+        const selectedTypes = slicerState[STUDENT_TYPE_SLICER_KEY];
+
         rows.forEach((row) => {
           const parsed = parseStudentsInvolved(row[studentsInvolvedField]);
+          const seenNames = new Set();
+
           parsed.forEach((entry) => {
-            if (!matchesStudentType(entry.type, studentType)) return;
-            const key = studentType === "All Types" ? `${entry.name} (${entry.type || "Unknown"})` : entry.name;
-            totals.set(key, (totals.get(key) || 0) + measureValue(row, measure));
+            const name = String(entry.name || "").trim();
+            const type = entry.type || "Unknown";
+
+            if (!name || seenNames.has(name)) return;
+            if (selectedTypes && selectedTypes.size > 0 && !selectedTypes.has(type)) return;
+
+            seenNames.add(name);
+            totals.set(name, (totals.get(name) || 0) + measureValue(row, measure));
           });
         });
         return totals;
@@ -891,40 +884,6 @@
       });
 
       return totals;
-    }
-
-    function populateStudentTypeOptions() {
-      studentTypeSelect.innerHTML = "";
-
-      if (!studentsInvolvedField) {
-        studentTypeSelect.appendChild(new Option("Subject", "Subject", true, true));
-        studentTypeSelect.appendChild(new Option("All Types", "All Types"));
-        studentTypeSelect.disabled = true;
-        return;
-      }
-
-      const foundTypes = new Set();
-      allRows.forEach((row) => {
-        parseStudentsInvolved(row[studentsInvolvedField]).forEach((entry) => {
-          const type = String(entry.type || "").trim();
-          if (type) foundTypes.add(type);
-        });
-      });
-
-      const sortedTypes = [...foundTypes].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-      const subjectIndex = sortedTypes.findIndex((t) => normalizeFieldName(t) === normalizeFieldName("Subject"));
-      if (subjectIndex > -1) {
-        const [subjectType] = sortedTypes.splice(subjectIndex, 1);
-        sortedTypes.unshift(subjectType);
-      }
-
-      if (!sortedTypes.length) sortedTypes.push("Subject");
-      sortedTypes.forEach((type, index) => {
-        studentTypeSelect.appendChild(new Option(type, type, index === 0, index === 0));
-      });
-      studentTypeSelect.appendChild(new Option("All Types", "All Types"));
-
-      studentTypeSelect.disabled = false;
     }
 
     function parseStudentsInvolved(value) {
@@ -939,11 +898,6 @@
           return { name, type };
         })
         .filter((item) => item.name);
-    }
-
-    function matchesStudentType(type, selectedType) {
-      if (selectedType === "All Types") return true;
-      return normalizeFieldName(type) === normalizeFieldName(selectedType);
     }
 
     function updateGroupSelectLabels(selectEl) {
@@ -961,7 +915,7 @@
     }
 
     function slicerFieldLabel(field) {
-      if (field === STUDENT_ROLE_SLICER_KEY) return "Name - Role";
+      if (field === STUDENT_TYPE_SLICER_KEY) return "Role";
       return field;
     }
 
@@ -1171,13 +1125,10 @@
       grandTotalEl.textContent = "0";
       groupCountEl.textContent = "0";
 
-      [measureSelect, tree1Select, tree2Select, slicerFields, studentTypeSelect].forEach((el) => {
+      [measureSelect, tree1Select, tree2Select, slicerFields].forEach((el) => {
         el.innerHTML = "";
         el.disabled = true;
       });
-
-      studentTypeSelect.appendChild(new Option("Subject", "Subject", true, true));
-      studentTypeSelect.appendChild(new Option("All Types", "All Types"));
 
       sheetSelect.innerHTML = "";
       sheetSelect.disabled = true;
