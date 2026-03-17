@@ -986,15 +986,15 @@
 
     function drawPreview(rows) {
       const previewRows = sortRowsByDateDesc(dedupePreviewRows(rows));
-      const sample = previewRows.slice(0, 20);
-      if (!sample.length) {
+      const previewHeaders = getPreviewHeaders();
+      if (!previewRows.length) {
         previewTable.innerHTML = "";
         return;
       }
 
       const widthSample = previewRows.slice(0, 150);
       const colgroup = document.createElement("colgroup");
-      const widths = estimatePreviewColumnWidths(widthSample);
+      const widths = estimatePreviewColumnWidths(widthSample, previewHeaders);
       widths.forEach((width) => {
         const col = document.createElement("col");
         col.style.width = `${width}px`;
@@ -1003,7 +1003,7 @@
 
       const thead = document.createElement("thead");
       const hr = document.createElement("tr");
-      headers.forEach((h) => {
+      previewHeaders.forEach((h) => {
         const th = document.createElement("th");
         th.textContent = h;
         hr.appendChild(th);
@@ -1011,9 +1011,9 @@
       thead.appendChild(hr);
 
       const tbody = document.createElement("tbody");
-      sample.forEach((row) => {
+      previewRows.forEach((row) => {
         const tr = document.createElement("tr");
-        headers.forEach((h) => {
+        previewHeaders.forEach((h) => {
           const td = document.createElement("td");
           td.textContent = String(row[h] ?? "");
           tr.appendChild(td);
@@ -1025,6 +1025,24 @@
       previewTable.appendChild(colgroup);
       previewTable.appendChild(thead);
       previewTable.appendChild(tbody);
+    }
+
+    function getPreviewHeaders() {
+      const nameField = headers.find((h) => normalizeFieldName(h) === normalizeFieldName("Name")) || "";
+      const studentsField =
+        headers.find((h) => normalizeFieldName(h) === normalizeFieldName("Students Involved")) || "";
+      const previewExcludedFields = new Set([
+        normalizeFieldName("Academic House"),
+        normalizeFieldName("Status"),
+        normalizeFieldName("Severity")
+      ]);
+
+      const withoutName = (nameField ? headers.filter((h) => h !== nameField) : [...headers])
+        .filter((h) => !previewExcludedFields.has(normalizeFieldName(h)));
+      if (!studentsField) return withoutName;
+
+      const rest = withoutName.filter((h) => h !== studentsField);
+      return [studentsField, ...rest];
     }
 
     function dedupePreviewRows(rows) {
@@ -1075,8 +1093,8 @@
       return result;
     }
 
-    function estimatePreviewColumnWidths(rows) {
-      return headers.map((header) => {
+    function estimatePreviewColumnWidths(rows, fields = headers) {
+      return fields.map((header) => {
         const field = normalizeFieldName(header);
         const isDate = field.includes("date");
         const isLongText =
