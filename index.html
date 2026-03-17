@@ -560,10 +560,16 @@
       }
 
       const preferredNormalized = PREFERRED_SLICERS.map((name) => normalizeFieldName(name));
-      const orderedSlicerCandidates = [
-        ...roleAwareSlicerCandidates.filter((field) => preferredNormalized.includes(normalizeFieldName(slicerFieldLabel(field)))),
-        ...roleAwareSlicerCandidates.filter((field) => !preferredNormalized.includes(normalizeFieldName(slicerFieldLabel(field))))
-      ];
+      const orderedSlicerCandidates = [...roleAwareSlicerCandidates].sort((a, b) => {
+        const aLabel = normalizeFieldName(slicerFieldLabel(a));
+        const bLabel = normalizeFieldName(slicerFieldLabel(b));
+        const aIndex = preferredNormalized.indexOf(aLabel);
+        const bIndex = preferredNormalized.indexOf(bLabel);
+        const aRank = aIndex === -1 ? Number.MAX_SAFE_INTEGER : aIndex;
+        const bRank = bIndex === -1 ? Number.MAX_SAFE_INTEGER : bIndex;
+        if (aRank !== bRank) return aRank - bRank;
+        return 0;
+      });
 
       fillSelect(slicerFields, orderedSlicerCandidates, null, true);
       updateSlicerSelectLabels();
