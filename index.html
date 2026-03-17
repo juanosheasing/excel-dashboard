@@ -591,7 +591,7 @@
       tree1Select.disabled = false;
       tree2Select.disabled = false;
       slicerFields.disabled = false;
-      studentTypeSelect.disabled = !studentsInvolvedField;
+      populateStudentTypeOptions();
 
       dateField = headers.find((h) => h.toLowerCase().includes("date")) || "";
       configureDateRangeInputs();
@@ -882,6 +882,40 @@
       return totals;
     }
 
+    function populateStudentTypeOptions() {
+      studentTypeSelect.innerHTML = "";
+
+      if (!studentsInvolvedField) {
+        studentTypeSelect.appendChild(new Option("Subject", "Subject", true, true));
+        studentTypeSelect.appendChild(new Option("All Types", "All Types"));
+        studentTypeSelect.disabled = true;
+        return;
+      }
+
+      const foundTypes = new Set();
+      allRows.forEach((row) => {
+        parseStudentsInvolved(row[studentsInvolvedField]).forEach((entry) => {
+          const type = String(entry.type || "").trim();
+          if (type) foundTypes.add(type);
+        });
+      });
+
+      const sortedTypes = [...foundTypes].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+      const subjectIndex = sortedTypes.findIndex((t) => normalizeFieldName(t) === normalizeFieldName("Subject"));
+      if (subjectIndex > -1) {
+        const [subjectType] = sortedTypes.splice(subjectIndex, 1);
+        sortedTypes.unshift(subjectType);
+      }
+
+      if (!sortedTypes.length) sortedTypes.push("Subject");
+      sortedTypes.forEach((type, index) => {
+        studentTypeSelect.appendChild(new Option(type, type, index === 0, index === 0));
+      });
+      studentTypeSelect.appendChild(new Option("All Types", "All Types"));
+
+      studentTypeSelect.disabled = false;
+    }
+
     function parseStudentsInvolved(value) {
       const text = String(value ?? "").trim();
       if (!text) return [];
@@ -1132,8 +1166,6 @@
       });
 
       studentTypeSelect.appendChild(new Option("Subject", "Subject", true, true));
-      studentTypeSelect.appendChild(new Option("Bystander", "Bystander"));
-      studentTypeSelect.appendChild(new Option("Victim", "Victim"));
       studentTypeSelect.appendChild(new Option("All Types", "All Types"));
 
       sheetSelect.innerHTML = "";
