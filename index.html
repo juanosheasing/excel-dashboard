@@ -110,18 +110,16 @@
 
     #slicerHost {
       grid-column: 1 / span 4;
-      display: flex;
-      flex-wrap: wrap;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
       gap: 10px;
-      align-items: flex-start;
-      align-content: flex-start;
     }
 
     .slicer {
       border: 1px solid #8cb0d7;
       background: #eaf1fa;
       min-height: 260px;
-      flex: 0 0 auto;
+      min-width: 0;
     }
 
     .slicer-head {
@@ -322,7 +320,7 @@
 
       <div class="controls-panel">
         <div class="panel">
-          <label for="slicerFields">Slicer Columns (pick up to 4)</label>
+          <label for="slicerFields">Slicer Columns (pick up to 6)</label>
           <select id="slicerFields" multiple disabled></select>
         </div>
 
@@ -392,6 +390,7 @@
     const PREFERRED_SLICERS = ["Name - Role", "Year", "Form", "Location"];
     const STUDENTS_GROUP_KEY = "__students_involved__";
     const STUDENT_ROLE_SLICER_KEY = "__student_role_slicer__";
+    const MAX_SLICERS = 6;
 
     let workbook = null;
     let headers = [];
@@ -411,7 +410,7 @@
     loadSheetBtn.addEventListener("click", () => {
       if (sheetSelect.value) parseSheet(sheetSelect.value);
     });
-    slicerFields.addEventListener("change", refreshSlicersFromPicker);
+    slicerFields.addEventListener("change", handleSlicerFieldChange);
     updateBtn.addEventListener("click", renderAll);
     resetBtn.addEventListener("click", resetSlicerSelections);
     measureSelect.addEventListener("change", renderAll);
@@ -582,10 +581,10 @@
       updateSlicerSelectLabels();
       const defaults = orderedSlicerCandidates.filter((field) =>
         preferredNormalized.includes(normalizeFieldName(slicerFieldLabel(field)))
-      ).slice(0, 4);
+      ).slice(0, MAX_SLICERS);
 
       if (!defaults.length) {
-        defaults.push(...orderedSlicerCandidates.slice(0, Math.min(4, orderedSlicerCandidates.length)));
+        defaults.push(...orderedSlicerCandidates.slice(0, Math.min(MAX_SLICERS, orderedSlicerCandidates.length)));
       }
       [...slicerFields.options].forEach((opt) => {
         opt.selected = defaults.includes(opt.value);
@@ -600,6 +599,14 @@
       dateField = headers.find((h) => h.toLowerCase().includes("date")) || "";
       configureDateRangeInputs();
 
+      refreshSlicersFromPicker();
+    }
+
+    function handleSlicerFieldChange() {
+      const selected = [...slicerFields.options].filter((opt) => opt.selected);
+      if (selected.length > MAX_SLICERS) {
+        selected.slice(MAX_SLICERS).forEach((opt) => { opt.selected = false; });
+      }
       refreshSlicersFromPicker();
     }
 
@@ -659,7 +666,7 @@
     }
 
     function refreshSlicersFromPicker() {
-      const fields = [...slicerFields.selectedOptions].map((o) => o.value).slice(0, 4);
+      const fields = [...slicerFields.selectedOptions].map((o) => o.value).slice(0, MAX_SLICERS);
       const nextState = {};
       slicerHost.innerHTML = "";
 
@@ -669,7 +676,6 @@
 
         const box = document.createElement("section");
         box.className = "slicer";
-        box.style.width = `${estimateSlicerWidth(field)}px`;
 
         const head = document.createElement("div");
         head.className = "slicer-head";
@@ -726,18 +732,6 @@
         });
       });
       return [...set].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-    }
-
-    function estimateSlicerWidth(field) {
-      const values = distinctValues(field);
-      const label = slicerFieldLabel(field);
-      let width = estimateTextWidth(label) + 44;
-
-      values.slice(0, 200).forEach((value) => {
-        width = Math.max(width, estimateTextWidth(value) + 52);
-      });
-
-      return Math.round(clamp(width, 150, 330));
     }
 
     function applyFilters() {
