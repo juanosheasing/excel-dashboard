@@ -984,13 +984,14 @@
     }
 
     function drawPreview(rows) {
-      const sample = rows.slice(0, 20);
+      const previewRows = dedupePreviewRows(rows);
+      const sample = previewRows.slice(0, 20);
       if (!sample.length) {
         previewTable.innerHTML = "";
         return;
       }
 
-      const widthSample = rows.slice(0, 150);
+      const widthSample = previewRows.slice(0, 150);
       const colgroup = document.createElement("colgroup");
       const widths = estimatePreviewColumnWidths(widthSample);
       widths.forEach((width) => {
@@ -1023,6 +1024,33 @@
       previewTable.appendChild(colgroup);
       previewTable.appendChild(thead);
       previewTable.appendChild(tbody);
+    }
+
+    function dedupePreviewRows(rows) {
+      if (!studentsInvolvedField) return rows;
+
+      const seen = new Set();
+      const nameField = headers.find((h) => normalizeFieldName(h) === normalizeFieldName("Name")) || "";
+      const result = [];
+
+      rows.forEach((row) => {
+        const parsed = parseStudentsInvolved(row[studentsInvolvedField]);
+        if (parsed.length <= 1) {
+          result.push(row);
+          return;
+        }
+
+        const key = headers.map((header) => {
+          if (nameField && header === nameField) return "";
+          return String(row[header] ?? "").trim();
+        }).join("\u001F");
+
+        if (seen.has(key)) return;
+        seen.add(key);
+        result.push(row);
+      });
+
+      return result;
     }
 
     function estimatePreviewColumnWidths(rows) {
