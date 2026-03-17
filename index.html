@@ -985,7 +985,7 @@
     }
 
     function drawPreview(rows) {
-      const previewRows = dedupePreviewRows(rows);
+      const previewRows = sortRowsByDateDesc(dedupePreviewRows(rows));
       const sample = previewRows.slice(0, 20);
       if (!sample.length) {
         previewTable.innerHTML = "";
@@ -1029,6 +1029,20 @@
 
     function dedupePreviewRows(rows) {
       return dedupeRowsByIncident(rows);
+    }
+
+    function sortRowsByDateDesc(rows) {
+      if (!dateField) return rows;
+
+      return rows
+        .map((row, index) => ({ row, index, date: parseDateValue(row[dateField]) }))
+        .sort((a, b) => {
+          const aTime = a.date ? a.date.getTime() : -Infinity;
+          const bTime = b.date ? b.date.getTime() : -Infinity;
+          if (aTime !== bTime) return bTime - aTime;
+          return a.index - b.index;
+        })
+        .map((entry) => entry.row);
     }
 
     function dedupeRowsByIncident(rows) {
