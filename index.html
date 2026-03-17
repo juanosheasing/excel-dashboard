@@ -385,8 +385,9 @@
       normalizeFieldName("Academic House")
     ]);
 
-    const PREFERRED_SLICERS = ["Name", "Year", "Form", "Location"];
+    const PREFERRED_SLICERS = ["Name - Role", "Year", "Form", "Location"];
     const STUDENTS_GROUP_KEY = "__students_involved__";
+    const STUDENT_ROLE_SLICER_KEY = "__student_role_slicer__";
 
     let workbook = null;
     let headers = [];
@@ -562,15 +563,21 @@
         (field) => !SLICER_EXCLUDED_FIELDS.has(normalizeFieldName(field))
       );
 
+      const roleAwareSlicerCandidates = [...slicerCandidates];
+      if (studentsInvolvedField && !roleAwareSlicerCandidates.includes(STUDENT_ROLE_SLICER_KEY)) {
+        roleAwareSlicerCandidates.unshift(STUDENT_ROLE_SLICER_KEY);
+      }
+
       const preferredNormalized = PREFERRED_SLICERS.map((name) => normalizeFieldName(name));
       const orderedSlicerCandidates = [
-        ...slicerCandidates.filter((field) => preferredNormalized.includes(normalizeFieldName(field))),
-        ...slicerCandidates.filter((field) => !preferredNormalized.includes(normalizeFieldName(field)))
+        ...roleAwareSlicerCandidates.filter((field) => preferredNormalized.includes(normalizeFieldName(slicerFieldLabel(field)))),
+        ...roleAwareSlicerCandidates.filter((field) => !preferredNormalized.includes(normalizeFieldName(slicerFieldLabel(field))))
       ];
 
       fillSelect(slicerFields, orderedSlicerCandidates, null, true);
+      updateSlicerSelectLabels();
       const defaults = orderedSlicerCandidates.filter((field) =>
-        preferredNormalized.includes(normalizeFieldName(field))
+        preferredNormalized.includes(normalizeFieldName(slicerFieldLabel(field)))
       ).slice(0, 4);
 
       if (!defaults.length) {
@@ -661,7 +668,7 @@
 
         const head = document.createElement("div");
         head.className = "slicer-head";
-        head.innerHTML = `<span>${field}</span><span>⌄</span>`;
+        head.innerHTML = `<span>${slicerFieldLabel(field)}</span><span>⌄</span>`;
 
         const body = document.createElement("div");
         body.className = "slicer-body";
@@ -692,10 +699,26 @@
     }
 
     function distinctValues(field) {
+      if (field === STUDENT_ROLE_SLICER_KEY) {
+        return distinctStudentRoleValues();
+      }
+
       const set = new Set();
       allRows.forEach((row) => {
         const t = String(row[field] ?? "").trim();
         set.add(t || "(blank)");
+      });
+      return [...set].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    }
+
+    function distinctStudentRoleValues() {
+      const set = new Set();
+      allRows.forEach((row) => {
+        const parsed = parseStudentsInvolved(row[studentsInvolvedField]);
+        parsed.forEach((entry) => {
+          const role = entry.type || "Unknown";
+          set.add(`${entry.name} - ${role}`);
+        });
       });
       return [...set].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
     }
@@ -707,6 +730,21 @@
       return allRows.filter((row) => {
         for (const [field, selected] of Object.entries(slicerState)) {
           if (!selected || selected.size === 0) continue;
+
+          if (field === STUDENT_ROLE_SLICER_KEY) {
+            const parsed = parseStudentsInvolved(row[studentsInvolvedField]);
+            const roles = new Set(parsed.map((entry) => `${entry.name} - ${entry.type || "Unknown"}`));
+            let matched = false;
+            for (const item of selected) {
+              if (roles.has(item)) {
+                matched = true;
+                break;
+              }
+            }
+            if (!matched) return false;
+            continue;
+          }
+
           const value = String(row[field] ?? "").trim() || "(blank)";
           if (!selected.has(value)) return false;
         }
@@ -869,6 +907,17 @@
           option.textContent = "Students Involved (parsed)";
         }
       });
+    }
+
+    function updateSlicerSelectLabels() {
+      [...slicerFields.options].forEach((option) => {
+        option.textContent = slicerFieldLabel(option.value);
+      });
+    }
+
+    function slicerFieldLabel(field) {
+      if (field === STUDENT_ROLE_SLICER_KEY) return "Name - Role";
+      return field;
     }
 
     function drawEmpty(targetId, text) {
