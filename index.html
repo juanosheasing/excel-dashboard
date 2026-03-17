@@ -1027,23 +1027,26 @@
     }
 
     function dedupePreviewRows(rows) {
-      if (!studentsInvolvedField) return rows;
+      const detailsField =
+        headers.find((h) => normalizeFieldName(h) === normalizeFieldName("Details")) ||
+        headers.find((h) => normalizeFieldName(h).includes("detail")) ||
+        "";
+
+      if (!studentsInvolvedField || !dateField || !detailsField) return rows;
 
       const seen = new Set();
-      const nameField = headers.find((h) => normalizeFieldName(h) === normalizeFieldName("Name")) || "";
       const result = [];
 
       rows.forEach((row) => {
-        const parsed = parseStudentsInvolved(row[studentsInvolvedField]);
-        if (parsed.length <= 1) {
-          result.push(row);
-          return;
-        }
+        const parsedDate = parseDateValue(row[dateField]);
+        const dateKey = parsedDate ? toIsoDate(parsedDate) : String(row[dateField] ?? "").trim();
+        const detailsKey = String(row[detailsField] ?? "").trim();
+        const studentsKey = parseStudentsInvolved(row[studentsInvolvedField])
+          .map((entry) => `${entry.name}|${entry.type || "Unknown"}`)
+          .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
+          .join(",");
 
-        const key = headers.map((header) => {
-          if (nameField && header === nameField) return "";
-          return String(row[header] ?? "").trim();
-        }).join("\u001F");
+        const key = `${dateKey}\u001F${detailsKey}\u001F${studentsKey}`;
 
         if (seen.has(key)) return;
         seen.add(key);
