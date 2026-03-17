@@ -807,9 +807,10 @@
       }
 
       const rows = applyFilters();
+      const treemapRows = dedupeRowsByIncident(rows);
       const measure = measureSelect.value;
       const g1 = tree1Select.value;
-      const primaryTotals = groupTotals(rows, measure, g1);
+      const primaryTotals = groupTotals(treemapRows, measure, g1);
 
       let total = 0;
       rows.forEach((r) => { total += measureValue(r, measure); });
@@ -818,8 +819,8 @@
       grandTotalEl.textContent = fmt.format(total);
       groupCountEl.textContent = primaryTotals.size.toLocaleString();
 
-      drawTreemap("chart1", rows, measure, tree1Select.value);
-      drawTreemap("chart2", rows, measure, tree2Select.value);
+      drawTreemap("chart1", treemapRows, measure, tree1Select.value);
+      drawTreemap("chart2", treemapRows, measure, tree2Select.value);
       drawPreview(rows);
     }
 
@@ -1027,6 +1028,10 @@
     }
 
     function dedupePreviewRows(rows) {
+      return dedupeRowsByIncident(rows);
+    }
+
+    function dedupeRowsByIncident(rows) {
       const detailsField =
         headers.find((h) => normalizeFieldName(h) === normalizeFieldName("Details")) ||
         headers.find((h) => normalizeFieldName(h).includes("detail")) ||
